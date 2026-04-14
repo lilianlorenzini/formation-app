@@ -70,6 +70,9 @@ let items = [];
 let view = "list";
 let currentDate = new Date();
 
+// 🔥 anti doublons notifications
+let sentNotifications = new Set();
+
 // ---------------- CLOCK ----------------
 setInterval(() => {
   document.getElementById("clock").innerText =
@@ -77,35 +80,28 @@ setInterval(() => {
 }, 1000);
 
 // ---------------- NOTIFICATIONS ----------------
-function notify(text) {
+function notify(text, id) {
   if (Notification.permission !== "granted") return;
 
+  // 🔥 anti doublon
+  if (sentNotifications.has(id)) return;
+
   new Notification("📅 Rappel formation", { body: text });
+
+  sentNotifications.add(id);
 }
 
-// permission une seule fois
+// permission
 if ("Notification" in window && Notification.permission === "default") {
   Notification.requestPermission();
 }
 
 // ---------------- TEST NOTIF ----------------
 function testNotification() {
-  if (Notification.permission === "granted") {
-    new Notification("🔔 Test réussi", {
-      body: "Notifications OK"
-    });
-  } else {
-    Notification.requestPermission().then(p => {
-      if (p === "granted") {
-        new Notification("🔔 Test réussi", {
-          body: "Notifications OK"
-        });
-      }
-    });
-  }
+  new Notification("🔔 Test", { body: "Notifications OK" });
 }
 
-// ---------------- FIREBASE REALTIME ----------------
+// ---------------- FIREBASE ----------------
 onSnapshot(collection(db, "formations"), (snapshot) => {
   items = [];
 
@@ -117,9 +113,10 @@ onSnapshot(collection(db, "formations"), (snapshot) => {
   });
 
   render();
+  checkReminders(); // 🔥 check immédiat
 });
 
-// ---------------- ADD (FIX FINAL IMPORTANT) ----------------
+// ---------------- ADD ----------------
 async function addItem() {
   const item = {
     firstName: document.getElementById("firstName").value.trim(),
@@ -128,29 +125,17 @@ async function addItem() {
     date: document.getElementById("date").value
   };
 
-  console.log("DEBUG ITEM :", item);
-
   if (!item.firstName || !item.lastName || !item.title || !item.date) {
-    alert("⚠️ Remplis tous les champs !");
+    alert("Remplis tous les champs !");
     return;
   }
 
-  try {
-    await addDoc(collection(db, "formations"), item);
+  await addDoc(collection(db, "formations"), item);
 
-    console.log("✅ Ajout Firebase OK");
-
-    schedule(item);
-
-    document.getElementById("firstName").value = "";
-    document.getElementById("lastName").value = "";
-    document.getElementById("title").value = "";
-    document.getElementById("date").value = "";
-
-  } catch (e) {
-    console.error("❌ ERREUR FIREBASE :", e);
-    alert("Erreur Firebase → ouvre la console (F12)");
-  }
+  document.getElementById("firstName").value = "";
+  document.getElementById("lastName").value = "";
+  document.getElementById("title").value = "";
+  document.getElementById("date").value = "";
 }
 
 // ---------------- DELETE ----------------
@@ -158,53 +143,46 @@ async function deleteItem(id) {
   await deleteDoc(doc(db, "formations", id));
 }
 
-// ---------------- SCHEDULE ----------------
-function schedule(item) {
-  const eventTime = new Date(item.date).getTime();
-
-  const reminders = [
-    { offset: 30 * 24 * 60 * 60 * 1000, label: "📅 Dans 1 mois" },
-    { offset: 14 * 24 * 60 * 60 * 1000, label: "📢 Dans 2 semaines" },
-    { offset: 7 * 24 * 60 * 60 * 1000, label: "⚠️ Dans 1 semaine" },
-    { offset: 1 * 24 * 60 * 60 * 1000, label: "⏰ Demain" }
-  ];
-
-  reminders.forEach(r => {
-    const delay = (eventTime - r.offset) - Date.now();
-
-    if (delay > 0) {
-      setTimeout(() => {
-        notify(`${r.label}\n👤 ${item.firstName} ${item.lastName}\n📘 ${item.title}`);
-      }, delay);
-    }
-  });
-}
-
-// ---------------- AUTO CHECK ----------------
-setInterval(() => {
+// ---------------- 🔥 NOTIFICATIONS PROPRE ----------------
+function checkReminders() {
   const now = Date.now();
 
   items.forEach(item => {
     const eventTime = new Date(item.date).getTime();
 
-    const reminders = [
-      { offset: 30 * 24 * 60 * 60 * 1000, label: "📅 Dans 1 mois" },
-      { offset: 14 * 24 * 60 * 60 * 1000, label: "📢 Dans 2 semaines" },
-      { offset: 7 * 24 * 60 * 60 * 1000, label: "⚠️ Dans 1 semaine" },
-      { offset: 1 * 24 * 60 * 60 * 1000, label: "⏰ Demain" }
-    ];
+    const diffDays = Math.floor((eventTime - now) / (1000 * 60 * 60 * 24));
 
-    reminders.forEach(r => {
-      const reminderTime = eventTime - r.offset;
-      const diff = now - reminderTime;
+    let label = null;
+    let key = null;
 
-      if (diff >= 0 && diff < 60000) {
-        notify(`${r.label}\n👤 ${item.firstName} ${item.lastName}\n📘 ${item.title}`);
-      }
-    });
+    if (diffDays === 30) {
+      label = "📅 Dans 1 mois";
+      key = item.id + "-30";
+    }
+    else if (diffDays === 14) {
+      label = "📢 Dans 2 semaines";
+      key = item.id + "-14";
+    }
+    else if (diffDays === 7) {
+      label = "⚠️ Dans 1 semaine";
+      key = item.id + "-7";
+    }
+    else if (diffDays === 1) {
+      label = "⏰ Demain";
+      key = item.id + "-1";
+    }
+
+    if (label && key) {
+      notify(
+        `${label}\n👤 ${item.firstName} ${item.lastName}\n📘 ${item.title}`,
+        key
+      );
+    }
   });
+}
 
-}, 30000);
+// ---------------- CHECK AUTOMATIQUE ----------------
+setInterval(checkReminders, 60000);
 
 // ---------------- VIEWS ----------------
 function showList(){ view="list"; render(); }
@@ -265,7 +243,7 @@ function render(){
   }
 }
 
-// ---------------- GLOBAL FUNCTIONS (IMPORTANT) ----------------
+// ---------------- GLOBAL ----------------
 window.addItem = addItem;
 window.deleteItem = deleteItem;
 window.showList = showList;
