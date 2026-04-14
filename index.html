@@ -39,6 +39,7 @@ input, button { padding: 8px; margin: 5px; }
 
 <div id="app"></div>
 
+<!-- 🔥 FIREBASE -->
 <script type="module">
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -51,7 +52,7 @@ import {
   doc 
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-// 🔥 FIREBASE CONFIG
+// 🔥 CONFIG
 const firebaseConfig = {
   apiKey: "AIzaSyAQnoVwoR52Q0-OBD7rGa0BKZhtLlkXoN4",
   authDomain: "gestion-formation-act-30-et-35.firebaseapp.com",
@@ -84,18 +85,13 @@ function notify(text) {
   });
 }
 
-// ---------------- PERMISSION (UNE SEULE FOIS) ----------------
+// permission une seule fois
 if ("Notification" in window && Notification.permission === "default") {
   Notification.requestPermission();
 }
 
 // ---------------- TEST NOTIF ----------------
 function testNotification() {
-  if (!("Notification" in window)) {
-    alert("Notifications non supportées.");
-    return;
-  }
-
   if (Notification.permission === "granted") {
     new Notification("🔔 Test réussi", {
       body: "Notifications OK"
@@ -128,22 +124,30 @@ onSnapshot(collection(db, "formations"), (snapshot) => {
 // ---------------- ADD ----------------
 async function addItem() {
   const item = {
-    firstName: firstName.value,
-    lastName: lastName.value,
-    title: title.value,
-    date: date.value
+    firstName: document.getElementById("firstName").value,
+    lastName: document.getElementById("lastName").value,
+    title: document.getElementById("title").value,
+    date: document.getElementById("date").value
   };
 
-  if (!item.firstName || !item.lastName || !item.title || !item.date) return;
+  if (!item.firstName || !item.lastName || !item.title || !item.date) {
+    alert("Remplis tous les champs !");
+    return;
+  }
 
-  await addDoc(collection(db, "formations"), item);
+  try {
+    await addDoc(collection(db, "formations"), item);
 
-  schedule(item);
+    schedule(item);
 
-  firstName.value = "";
-  lastName.value = "";
-  title.value = "";
-  date.value = "";
+    document.getElementById("firstName").value = "";
+    document.getElementById("lastName").value = "";
+    document.getElementById("title").value = "";
+    document.getElementById("date").value = "";
+
+  } catch (e) {
+    console.error("Erreur ajout :", e);
+  }
 }
 
 // ---------------- DELETE ----------------
@@ -151,7 +155,7 @@ async function deleteItem(id) {
   await deleteDoc(doc(db, "formations", id));
 }
 
-// ---------------- SCHEDULE (RAPPELS INDIVIDUELS) ----------------
+// ---------------- SCHEDULE ----------------
 function schedule(item) {
   const eventTime = new Date(item.date).getTime();
 
@@ -163,8 +167,7 @@ function schedule(item) {
   ];
 
   reminders.forEach(r => {
-    const reminderTime = eventTime - r.offset;
-    const delay = reminderTime - Date.now();
+    const delay = (eventTime - r.offset) - Date.now();
 
     if (delay > 0) {
       setTimeout(() => {
@@ -174,7 +177,7 @@ function schedule(item) {
   });
 }
 
-// ---------------- AUTO CHECK (CORRIGÉ + FIABLE) ----------------
+// ---------------- AUTO CHECK ----------------
 setInterval(() => {
   const now = Date.now();
 
@@ -192,7 +195,6 @@ setInterval(() => {
       const reminderTime = eventTime - r.offset;
       const diff = now - reminderTime;
 
-      // 🔥 déclenchement strict (évite mauvais label)
       if (diff >= 0 && diff < 60000) {
         notify(`${r.label}\n👤 ${item.firstName} ${item.lastName}\n📘 ${item.title}`);
       }
@@ -260,7 +262,7 @@ function render(){
   }
 }
 
-// ---------------- GLOBAL FUNCTIONS ----------------
+// ---------------- IMPORTANT : EXPORT GLOBAL ----------------
 window.addItem = addItem;
 window.deleteItem = deleteItem;
 window.showList = showList;
