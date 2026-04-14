@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Gestion Formations</title>
+
+<style>
+body { font-family: Arial; margin: 20px; }
+input, button { padding: 8px; margin: 5px; }
+.card { border: 1px solid #ddd; padding: 10px; margin: 5px 0; }
+.grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+.day { border: 1px solid #ccc; min-height: 80px; padding: 5px; font-size: 12px; }
+.topbar { background:#f4f4f4; padding:10px; margin-bottom:10px; }
+</style>
+</head>
+
+<body>
+
+<h2>📅 Gestion Formations</h2>
+
+<div class="topbar">
+🕒 Heure : <b id="clock"></b>
+</div>
+
+<div>
+<input id="firstName" placeholder="Prénom">
+<input id="lastName" placeholder="Nom">
+<input id="title" placeholder="Formation">
+<input id="date" type="datetime-local">
+
+<button onclick="addItem()">Ajouter</button>
+<button onclick="testNotification()">🔔 Test notif</button>
+</div>
+
+<div>
+<button onclick="showList()">Liste</button>
+<button onclick="showCalendar()">Planning</button>
+</div>
+
+<div id="app"></div>
+
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { 
+  getFirestore, 
+  collection, 
+  addDoc, 
+  onSnapshot, 
+  deleteDoc, 
+  doc 
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+// 🔥 FIREBASE CONFIG
+const firebaseConfig = {
+  apiKey: "AIzaSyAQnoVwoR52Q0-OBD7rGa0BKZhtLlkXoN4",
+  authDomain: "gestion-formation-act-30-et-35.firebaseapp.com",
+  projectId: "gestion-formation-act-30-et-35",
+  storageBucket: "gestion-formation-act-30-et-35.firebasestorage.app",
+  messagingSenderId: "304535304874",
+  appId: "1:304535304874:web:8b003f898bbb410227aed3"
+};
+
+const appFirebase = initializeApp(firebaseConfig);
+const db = getFirestore(appFirebase);
+
+// ---------------- VARIABLES ----------------
+let items = [];
+let view = "list";
+let currentDate = new Date();
+
+// ---------------- CLOCK ----------------
+setInterval(() => {
+  document.getElementById("clock").innerText =
+    new Date().toLocaleString("fr-FR");
+}, 1000);
+
+// ---------------- NOTIFICATIONS ----------------
+function notify(text) {
+  if (Notification.permission !== "granted") return;
+
+  new Notification("📅 Rappel formation", {
+    body: text
+  });
+}
+
+// ---------------- PERMISSION (UNE SEULE FOIS) ----------------
+if ("Notification" in window && Notification.permission === "default") {
+  Notification.requestPermission();
+}
+
+// ---------------- TEST NOTIF ----------------
+function testNotification() {
+  if (!("Notification" in window)) {
+    alert("Notifications non supportées.");
+    return;
+  }
+
+  if (Notification.permission === "granted") {
+    new Notification("🔔 Test réussi", {
+      body: "Notifications OK"
+    });
+  } else {
+    Notification.requestPermission().then(p => {
+      if (p === "granted") {
+        new Notification("🔔 Test réussi", {
+          body: "Notifications OK"
+        });
+      }
+    });
+  }
+}
+
+// ---------------- FIREBASE REALTIME ----------------
+onSnapshot(collection(db, "formations"), (snapshot) => {
+  items = [];
+
+  snapshot.forEach(docSnap => {
+    items.push({
+      id: docSnap.id,
+      ...docSnap.data()
+    });
+  });
+
+  render();
+});
+
+// ---------------- ADD ----------------
+async function addItem() {
+  const item = {
+    firstName: firstName.value,
+    lastName: lastName.value,
+    title: title.value,
+    date: date.value
+  };
+
+  if (!item.firstName || !item.lastName || !item.title || !item.date) return;
+
+  await addDoc(collection(db, "formations"), item);
+
+  schedule(item);
+
+  firstName.value = "";
+  lastName.value = "";
+  title.value = "";
+  date.value = "";
+}
+
+// ---------------- DELETE ----------------
+async function deleteItem(id) {
+  await deleteDoc(doc(db, "formations", id));
+}
+
+// ---------------- SCHEDULE (RAPPELS INDIVIDUELS) ----------------
+function schedule(item) {
+  const eventTime = new Date(item.date).getTime();
+
+  const reminders = [
+    { offset: 30 * 24 * 60 * 60 * 1000, label: "📅 Dans 1 mois" },
+    { offset: 14 * 24 * 60 * 60 * 1000, label: "📢 Dans 2 semaines" },
+    { offset: 7 * 24 * 60 * 60 * 1000, label: "⚠️ Dans 1 semaine" },
+    { offset: 1 * 24 * 60 * 60 * 1000, label: "⏰ Demain" }
+  ];
+
+  reminders.forEach(r => {
+    const reminderTime = eventTime - r.offset;
+    const delay = reminderTime - Date.now();
+
+    if (delay > 0) {
+      setTimeout(() => {
+        notify(`${r.label}\n👤 ${item.firstName} ${item.lastName}\n📘 ${item.title}`);
+      }, delay);
+    }
+  });
+}
+
+// ---------------- AUTO CHECK (CORRIGÉ + FIABLE) ----------------
+setInterval(() => {
+  const now = Date.now();
+
+  items.forEach(item => {
+    const eventTime = new Date(item.date).getTime();
+
+    const reminders = [
+      { offset: 30 * 24 * 60 * 60 * 1000, label: "📅 Dans 1 mois" },
+      { offset: 14 * 24 * 60 * 60 * 1000, label: "📢 Dans 2 semaines" },
+      { offset: 7 * 24 * 60 * 60 * 1000, label: "⚠️ Dans 1 semaine" },
+      { offset: 1 * 24 * 60 * 60 * 1000, label: "⏰ Demain" }
+    ];
+
+    reminders.forEach(r => {
+      const reminderTime = eventTime - r.offset;
+      const diff = now - reminderTime;
+
+      // 🔥 déclenchement strict (évite mauvais label)
+      if (diff >= 0 && diff < 60000) {
+        notify(`${r.label}\n👤 ${item.firstName} ${item.lastName}\n📘 ${item.title}`);
+      }
+    });
+  });
+
+}, 30000);
+
+// ---------------- VIEWS ----------------
+function showList(){ view="list"; render(); }
+function showCalendar(){ view="calendar"; render(); }
+
+function changeMonth(offset){
+  currentDate.setMonth(currentDate.getMonth()+offset);
+  render();
+}
+
+// ---------------- RENDER ----------------
+function render(){
+  const app = document.getElementById("app");
+  app.innerHTML = "";
+
+  if(view==="list"){
+    items.forEach(item=>{
+      app.innerHTML += `
+        <div class="card">
+          <b>${item.firstName} ${item.lastName}</b><br>
+          📘 ${item.title}<br>
+          📅 ${new Date(item.date).toLocaleString()}<br>
+          <button onclick="deleteItem('${item.id}')">Supprimer</button>
+        </div>
+      `;
+    });
+  }
+
+  if(view==="calendar"){
+    const month = currentDate.getMonth();
+    const year = currentDate.getFullYear();
+    const days = new Date(year, month+1,0).getDate();
+
+    let html = `
+      <div>
+        <button onclick="changeMonth(-1)">◀</button>
+        <b>${currentDate.toLocaleString("fr-FR",{month:"long",year:"numeric"})}</b>
+        <button onclick="changeMonth(1)">▶</button>
+      </div>
+      <div class="grid">
+    `;
+
+    for(let d=1; d<=days; d++){
+      html += `<div class="day"><b>${d}</b>`;
+
+      items.forEach(item=>{
+        const date = new Date(item.date);
+        if(date.getDate()===d && date.getMonth()===month && date.getFullYear()===year){
+          html += `<div>👤 ${item.firstName} ${item.lastName}<br>${item.title}</div>`;
+        }
+      });
+
+      html += `</div>`;
+    }
+
+    html += `</div>`;
+    app.innerHTML = html;
+  }
+}
+
+// ---------------- GLOBAL FUNCTIONS ----------------
+window.addItem = addItem;
+window.deleteItem = deleteItem;
+window.showList = showList;
+window.showCalendar = showCalendar;
+window.changeMonth = changeMonth;
+window.testNotification = testNotification;
+
+</script>
+
+</body>
+</html>
