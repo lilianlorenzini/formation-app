@@ -70,9 +70,6 @@ let items = [];
 let view = "list";
 let currentDate = new Date();
 
-// 🔥 anti doublons notifications
-let sentNotifications = new Set();
-
 // ---------------- CLOCK ----------------
 setInterval(() => {
   document.getElementById("clock").innerText =
@@ -80,15 +77,15 @@ setInterval(() => {
 }, 1000);
 
 // ---------------- NOTIFICATIONS ----------------
-function notify(text, id) {
-  if (Notification.permission !== "granted") return;
+function notifyOnce(id, text) {
+  const key = "notif_" + id;
 
-  // 🔥 anti doublon
-  if (sentNotifications.has(id)) return;
+  if (localStorage.getItem(key)) return;
 
-  new Notification("📅 Rappel formation", { body: text });
-
-  sentNotifications.add(id);
+  if (Notification.permission === "granted") {
+    new Notification("📅 Rappel formation", { body: text });
+    localStorage.setItem(key, "true");
+  }
 }
 
 // permission
@@ -113,7 +110,7 @@ onSnapshot(collection(db, "formations"), (snapshot) => {
   });
 
   render();
-  checkReminders(); // 🔥 check immédiat
+  checkReminders(); // ✔ une seule vérification ici
 });
 
 // ---------------- ADD ----------------
@@ -143,46 +140,39 @@ async function deleteItem(id) {
   await deleteDoc(doc(db, "formations", id));
 }
 
-// ---------------- 🔥 NOTIFICATIONS PROPRE ----------------
+// ---------------- 🔥 CHECK NOTIFICATIONS (SANS BOUCLE) ----------------
 function checkReminders() {
   const now = Date.now();
 
   items.forEach(item => {
     const eventTime = new Date(item.date).getTime();
-
     const diffDays = Math.floor((eventTime - now) / (1000 * 60 * 60 * 24));
 
-    let label = null;
-    let key = null;
-
     if (diffDays === 30) {
-      label = "📅 Dans 1 mois";
-      key = item.id + "-30";
-    }
-    else if (diffDays === 14) {
-      label = "📢 Dans 2 semaines";
-      key = item.id + "-14";
-    }
-    else if (diffDays === 7) {
-      label = "⚠️ Dans 1 semaine";
-      key = item.id + "-7";
-    }
-    else if (diffDays === 1) {
-      label = "⏰ Demain";
-      key = item.id + "-1";
+      notifyOnce(item.id + "-30",
+        `📅 Dans 1 mois\n👤 ${item.firstName} ${item.lastName}\n📘 ${item.title}`
+      );
     }
 
-    if (label && key) {
-      notify(
-        `${label}\n👤 ${item.firstName} ${item.lastName}\n📘 ${item.title}`,
-        key
+    if (diffDays === 14) {
+      notifyOnce(item.id + "-14",
+        `📢 Dans 2 semaines\n👤 ${item.firstName} ${item.lastName}\n📘 ${item.title}`
+      );
+    }
+
+    if (diffDays === 7) {
+      notifyOnce(item.id + "-7",
+        `⚠️ Dans 1 semaine\n👤 ${item.firstName} ${item.lastName}\n📘 ${item.title}`
+      );
+    }
+
+    if (diffDays === 1) {
+      notifyOnce(item.id + "-1",
+        `⏰ Demain\n👤 ${item.firstName} ${item.lastName}\n📘 ${item.title}`
       );
     }
   });
 }
-
-// ---------------- CHECK AUTOMATIQUE ----------------
-setInterval(checkReminders, 60000);
 
 // ---------------- VIEWS ----------------
 function showList(){ view="list"; render(); }
