@@ -80,9 +80,7 @@ setInterval(() => {
 function notify(text) {
   if (Notification.permission !== "granted") return;
 
-  new Notification("📅 Rappel formation", {
-    body: text
-  });
+  new Notification("📅 Rappel formation", { body: text });
 }
 
 // permission une seule fois
@@ -121,22 +119,26 @@ onSnapshot(collection(db, "formations"), (snapshot) => {
   render();
 });
 
-// ---------------- ADD ----------------
+// ---------------- ADD (FIX FINAL IMPORTANT) ----------------
 async function addItem() {
   const item = {
-    firstName: document.getElementById("firstName").value,
-    lastName: document.getElementById("lastName").value,
-    title: document.getElementById("title").value,
+    firstName: document.getElementById("firstName").value.trim(),
+    lastName: document.getElementById("lastName").value.trim(),
+    title: document.getElementById("title").value.trim(),
     date: document.getElementById("date").value
   };
 
+  console.log("DEBUG ITEM :", item);
+
   if (!item.firstName || !item.lastName || !item.title || !item.date) {
-    alert("Remplis tous les champs !");
+    alert("⚠️ Remplis tous les champs !");
     return;
   }
 
   try {
     await addDoc(collection(db, "formations"), item);
+
+    console.log("✅ Ajout Firebase OK");
 
     schedule(item);
 
@@ -146,7 +148,8 @@ async function addItem() {
     document.getElementById("date").value = "";
 
   } catch (e) {
-    console.error("Erreur ajout :", e);
+    console.error("❌ ERREUR FIREBASE :", e);
+    alert("Erreur Firebase → ouvre la console (F12)");
   }
 }
 
@@ -262,7 +265,7 @@ function render(){
   }
 }
 
-// ---------------- IMPORTANT : EXPORT GLOBAL ----------------
+// ---------------- GLOBAL FUNCTIONS (IMPORTANT) ----------------
 window.addItem = addItem;
 window.deleteItem = deleteItem;
 window.showList = showList;
